@@ -1,9 +1,10 @@
 #pragma once
 
-#include <string.h>
-
-#include <vpx/vpx_codec.h>
-#include <vpx/vpx_encoder.h>
+#include "codec.h"
+#include "config.h"
+#include "frame.h"
+#include "bed.h"
+#include "rtp.h"
 
 /* Termcap colors */
 
@@ -21,53 +22,6 @@
 #define BZERO_STRUCT(x) memset(&(x), 0, sizeof(x));
 #define BZERO_ARRAY(x) memset((x), 0, sizeof(x));
 
-/* VPX facilities */
-
-#define VP8_FOURCC (0x30385056)
-#define VP9_FOURCC (0x30395056)
-
-#define CONFIG_VP9(x) (!strcmp(x->codec.name, "VP9"))
-#define CONFIG_VP8(x) (!strcmp(x->codec.name, "VP8"))
-
-/* Control data structures */
-
-typedef struct rtvs_codec
-{
-        const char              *name;
-        const vpx_codec_iface_t *(*cx_iface)(void);
-        const vpx_codec_iface_t *(*dx_iface)(void);
-        size_t                  fourcc;
-        vpx_codec_enc_cfg_t     vpx_cfg;
-} rtvs_codec_t;
-
-typedef struct config
-{
-        const char   *device;
-        int          framerate;
-        int          bitrate;
-        int          thread_num;
-        int          height;
-        int          width;
-        rtvs_codec_t codec;
-} rtvs_config_t;
-
-enum
-{
-        EMPTY        = 0x00,
-        HARD_ENCODED = 0x01,
-        SOFT_ENCODED = 0x02
-};
-
-#define MAX_SIMULT_FRAMES 3
-
-typedef struct frame
-{
-        uint8_t     flags;
-        const char  *data;
-        size_t      size;
-        int64_t     pts;
-} rtvs_frame_t;
-
 /* Modules definitions */
 
 extern int Capture_start(rtvs_config_t *cfg);
@@ -82,3 +36,14 @@ extern int Muxing_open_file(const char *outfile);
 extern int Muxing_close_file(void);
 extern void Muxing_ivf_write_header(const rtvs_config_t *cfg, size_t frame_num);
 extern void Muxing_ivf_write_frame(const rtvs_frame_t *frame);
+
+extern void Packetizer_init();
+extern void Packetizer_packetize(rtvs_frame_t *frame);
+
+extern void Frame_init_partitions(rtvs_frame_t *frame);
+
+extern void Bed_init(rtvs_bed_t *bed, const unsigned char *data, size_t size);
+extern int Bed_get_bit(rtvs_bed_t *bed);
+extern int Bed_get_uint(rtvs_bed_t *bed, int bits);
+extern int Bed_get_int(rtvs_bed_t *bed, int bits);
+extern int Bed_maybe_get_int(rtvs_bed_t *bed, int bits);

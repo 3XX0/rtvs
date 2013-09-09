@@ -26,8 +26,8 @@ static void rtvs_config_default(rtvs_config_t *cfg)
 
 static int _kbhit(void)
 {
-        fd_set          fds;
-        struct timeval  tv;
+        fd_set         fds;
+        struct timeval tv;
 
         tv.tv_sec = 0;
         tv.tv_usec = 0;
@@ -44,13 +44,13 @@ static int _kbhit(void)
 /* TODO Handle vpx error codes */
 int main(int argc, char **argv)
 {
-        rtvs_frame_t    frames[MAX_SIMULT_FRAMES];
-        size_t          frame_num = 0;
-        rtvs_config_t   cfg;
-        int             opt;
+        rtvs_frame_t  frames[MAX_SIMULT_FRAMES];
+        size_t        frame_num = 0;
+        rtvs_config_t cfg;
+        int           opt;
 
-        const char      *mux_parm    = NULL;
-        const char      *stream_parm = NULL;
+        const char    *mux_parm    = NULL;
+        const char    *stream_parm = NULL;
 
         rtvs_config_default(&cfg);
         while ((opt = getopt(argc, argv, "s:m:d:f:h:w:b:c:t:")) != -1) {
@@ -92,9 +92,11 @@ int main(int argc, char **argv)
                 errx(1, "Could not start encoding");
         if (mux_parm && Muxing_open_file(mux_parm) < 0)
                 err(1, "Could not open mux file");
+        if (stream_parm)
+                Packetizer_init();
 
         printf("\n%s --- Configuration ---\n"
-            " | device: %s\n | codec: %s\n | resolution: %dx%d\n | fps: %d\n | bitrate: %d\n | threads: %d%s\n",
+            " | device: %s\n | codec: %s\n | resolution: %ux%u\n | fps: %u\n | bitrate: %u\n | threads: %u%s\n",
             CBLUE, cfg.device, cfg.codec.name, cfg.width, cfg.height, cfg.framerate, cfg.bitrate, cfg.thread_num, CDFLT);
 
         while (!_kbhit()) {
@@ -108,9 +110,11 @@ int main(int argc, char **argv)
                         continue;
                 }
                 for (int i = 0; i < MAX_SIMULT_FRAMES; ++i)
-                        if (!(frames[i].flags & EMPTY)) {
+                        if (frames[i].flags != EMPTY) {
                                 if (mux_parm)
                                         Muxing_ivf_write_frame(frames + i);
+                                if (stream_parm)
+                                        Packetizer_packetize(frames + i);
                                 ++frame_num;
                         }
         }

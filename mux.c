@@ -63,8 +63,8 @@ void Muxing_ivf_write_header(const rtvs_config_t *cfg, size_t frame_num)
 
 void Muxing_ivf_write_frame(const rtvs_frame_t *frame)
 {
-        char                    header[12];
-        const vpx_codec_pts_t   pts = frame->pts;
+        char                  header[12];
+        const vpx_codec_pts_t pts = frame->pts;
 
         mem_put_le32(header, (uint32_t) frame->size);
         mem_put_le32(header+4, pts & 0xFFFFFFFF);

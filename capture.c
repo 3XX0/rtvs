@@ -17,8 +17,8 @@
 #define NB_BUFFER 4
 static struct
 {
-        void    *ptr;
-        size_t  length;
+        void   *ptr;
+        size_t size;
 }                         membuf[NB_BUFFER];
 static int                fd;
 static fd_set             fds;
@@ -27,10 +27,10 @@ static int                hwcx_supported = 0;
 
 int Capture_start(rtvs_config_t *cfg)
 {
-        struct v4l2_streamparm      setfps;
-        struct v4l2_capability      cap;
-        struct v4l2_format          fmt;
-        struct v4l2_requestbuffers  reqb;
+        struct v4l2_streamparm     setfps;
+        struct v4l2_capability     cap;
+        struct v4l2_format         fmt;
+        struct v4l2_requestbuffers reqb;
 
         FAIL_ON_NEGATIVE(fd = open(cfg->device, O_RDWR | O_NONBLOCK))
         FD_ZERO(&fds);
@@ -52,7 +52,7 @@ int Capture_start(rtvs_config_t *cfg)
         fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_VP8;
         fmt.fmt.pix.field = V4L2_FIELD_ANY;
         /* XXX: VP9 compressed format isn't supported by V4L2
-         * TODO VP8 support */
+         * TODO Hardware VP8 support */
         if ( CONFIG_VP9(cfg) || CONFIG_VP8(cfg) || ioctl(fd, VIDIOC_S_FMT, &fmt) < 0) {
                 printf("%sHardware acceleration not supported\n"
                     "Fallback to raw YUYV, software encoding%s\n", CRED, CDFLT);
@@ -88,7 +88,7 @@ int Capture_start(rtvs_config_t *cfg)
                 buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
                 buf.memory = V4L2_MEMORY_MMAP;
                 FAIL_ON_NEGATIVE(ioctl(fd, VIDIOC_QUERYBUF, &buf))
-                membuf[i].length = buf.length;
+                membuf[i].size = buf.length;
                 membuf[i].ptr = mmap(NULL, buf.length, PROT_READ|PROT_WRITE,
                     MAP_SHARED, fd, buf.m.offset);
                 if (membuf[i].ptr == MAP_FAILED)
@@ -121,7 +121,7 @@ int Capture_stop(void)
 
         /* Unmap the buffers */
         for (int i = 0; i < NB_BUFFER; ++i)
-            FAIL_ON_NEGATIVE(munmap(membuf[i].ptr, membuf[i].length))
+            FAIL_ON_NEGATIVE(munmap(membuf[i].ptr, membuf[i].size))
 
         FAIL_ON_NEGATIVE(close(fd))
         return (0);
@@ -129,7 +129,7 @@ int Capture_stop(void)
 
 static int64_t get_curtime()
 {
-        struct timespec  ts;
+        struct timespec ts;
 
         clock_gettime(CLOCK_REALTIME, &ts);
         return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);

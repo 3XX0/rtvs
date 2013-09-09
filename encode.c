@@ -5,10 +5,10 @@
 #include <libswscale/swscale.h>
 #include <vpx/vp8cx.h>
 
-static vpx_codec_ctx_t      codec;
-static vpx_image_t          yuyv_img;
-static vpx_image_t          yuv420_img;
-static struct SwsContext    *scale_ctx;
+static vpx_codec_ctx_t   codec;
+static vpx_image_t       yuyv_img;
+static vpx_image_t       yuv420_img;
+static struct SwsContext *scale_ctx;
 
 int Encoder_start(rtvs_config_t *cfg)
 {
