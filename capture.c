@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <assert.h>
 #include <unistd.h>
 #include <err.h>
 #include <string.h>
@@ -24,6 +25,8 @@ static int                fd;
 static fd_set             fds;
 static struct v4l2_buffer buf;
 static int                hwcx_supported = 0;
+static int64_t            old_pts = 0;
+static uint64_t           frame_num = 0;
 
 int Capture_start(rtvs_config_t *cfg)
 {
@@ -71,6 +74,7 @@ int Capture_start(rtvs_config_t *cfg)
         setfps.parm.capture.timeperframe.numerator = 1;
         setfps.parm.capture.timeperframe.denominator = cfg->framerate;
         FAIL_ON_NEGATIVE(ioctl(fd, VIDIOC_S_PARM, &setfps))
+        assert(setfps.parm.capture.timeperframe.numerator == 1);
         cfg->framerate = setfps.parm.capture.timeperframe.denominator;
 
         /* Fetch device frame buffers */
@@ -145,6 +149,14 @@ int Capture_get_frame(rtvs_frame_t *frame)
         frame->data = membuf[buf.index].ptr;
         frame->size = buf.bytesused;
         frame->pts  = get_curtime();
+        ++frame_num;
+
+        if (old_pts) {
+                printf("\rfps = %.2f, frames = %" PRIu64,
+                    (float) 1000 / (frame->pts - old_pts), frame_num);
+                fflush(stdout);
+        }
+        old_pts = frame->pts;
 
         FAIL_ON_NEGATIVE(ioctl(fd, VIDIOC_QBUF, &buf))
         return (0);

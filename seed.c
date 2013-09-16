@@ -53,7 +53,7 @@ int main(int argc, char **argv)
         const char    *stream_parm = NULL;
 
         rtvs_config_default(&cfg);
-        while ((opt = getopt(argc, argv, "s:m:d:f:h:w:b:c:t:")) != -1) {
+        while ((opt = getopt(argc, argv, "hs:m:d:f:x:b:c:t:")) != -1) {
                 switch (opt) {
                 case 's':
                         stream_parm = optarg;
@@ -67,11 +67,9 @@ int main(int argc, char **argv)
                 case 'f':
                         cfg.framerate = atoi(optarg);
                         break;
-                case 'h':
-                        cfg.height = atoi(optarg);
-                        break;
-                case 'w':
+                case 'x':
                         cfg.width = atoi(optarg);
+                        cfg.height = atoi(strchr(optarg, 'x') + 1);
                         break;
                 case 'b':
                         cfg.bitrate = atoi(optarg);
@@ -79,9 +77,10 @@ int main(int argc, char **argv)
                 case 't':
                         cfg.thread_num = atoi(optarg);
                         break;
+                case 'h':
                 default:
-                        fprintf(stderr, "Usage: %s [-s ip:port] [-m file.ivf] [-d device] [-f framerate] [-h height]"
-                            "[-w width] [-b bitrate] [-t threads]\n", argv[0]);
+                        fprintf(stderr, "Usage: %s [-h] [-s ip:port] [-m file.ivf] [-d device] [-f framerate]"
+                            " [-x widthxheight] [-b bitrate] [-t threads]\n", argv[0]);
                         exit(0);
                 }
         }
@@ -96,7 +95,7 @@ int main(int argc, char **argv)
                 Packetizer_init();
 
         printf("\n%s --- Configuration ---\n"
-            " | device: %s\n | codec: %s\n | resolution: %ux%u\n | fps: %u\n | bitrate: %u\n | threads: %u%s\n",
+            " | device: %s\n | codec: %s\n | resolution: %ux%u\n | fps: %u\n | bitrate: %u\n | threads: %u%s\n\n",
             CBLUE, cfg.device, cfg.codec.name, cfg.width, cfg.height, cfg.framerate, cfg.bitrate, cfg.thread_num, CDFLT);
 
         while (!_kbhit()) {

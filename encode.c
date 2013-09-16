@@ -74,8 +74,8 @@ int Encoder_encode_frame(const rtvs_config_t *cfg, rtvs_frame_t *frames)
         const vpx_codec_enc_cfg_t* const vpx_cfg = &cfg->codec.vpx_cfg;
 
         const vpx_codec_pts_t pts      = frames[0].pts;
-        const unsigned long   duration = (double) (1 / cfg->framerate) / /* timeperframe / timebase */
-                                         (vpx_cfg->g_timebase.num / vpx_cfg->g_timebase.den);
+        const unsigned long   duration = ((double) 1 / cfg->framerate) / /* timeperframe / timebase */
+                                         ((double) vpx_cfg->g_timebase.num / vpx_cfg->g_timebase.den);
 
         assert(frames[0].size == (size_t) cfg->width * cfg->height * 2);
         memcpy(yuyv_img.planes[0], frames[0].data, frames[0].size);

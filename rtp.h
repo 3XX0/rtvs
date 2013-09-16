@@ -25,18 +25,18 @@ typedef struct /* 13 bytes + RTP_PAYLOAD_SIZE */
         uint16_t version     : 2;
 #endif
         uint16_t seqnum;          /* Sequence number */
-        uint32_t timestamp;       /* 90Hz resolution timestamp */
+        uint32_t timestamp;       /* 90kHz resolution timestamp */
         uint32_t ssrc;            /* Synchronization source identifier */
         /* Optional fields */
 
         /* VP8 Payload descriptor, draft-ietf-payload-vp8-09 */
 #ifdef BIG_ENDIAN
-        uint8_t extended  : 1; /* Extended control bit (0) */
-        uint8_t reserved0 : 1; /* Reserved for future use (0) */
-        uint8_t nonref    : 1; /* Non reference frame */
-        uint8_t pstart    : 1; /* VP8 Partition start bit */
-        uint8_t reserved1 : 1; /* Reserved for future use (0) */
-        uint8_t pid       : 3; /* Partition index */
+        uint8_t extended  : 1;    /* Extended control bit (0) */
+        uint8_t reserved0 : 1;    /* Reserved for future use (0) */
+        uint8_t nonref    : 1;    /* Non reference frame */
+        uint8_t pstart    : 1;    /* VP8 Partition start bit */
+        uint8_t reserved1 : 1;    /* Reserved for future use (0) */
+        uint8_t pid       : 3;    /* Partition index */
 #else
         uint8_t pid       : 3;
         uint8_t reserved1 : 1;
