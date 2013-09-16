@@ -52,7 +52,9 @@ int Capture_start(rtvs_config_t *cfg)
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         fmt.fmt.pix.width = cfg->width;
         fmt.fmt.pix.height = cfg->height;
+#ifdef HAS_VP8_HW_SUPPORT
         fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_VP8;
+#endif
         fmt.fmt.pix.field = V4L2_FIELD_ANY;
         /* XXX: VP9 compressed format isn't supported by V4L2
          * TODO Hardware VP8 support */
