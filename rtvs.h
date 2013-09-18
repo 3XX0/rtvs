@@ -37,7 +37,7 @@ extern int Muxing_close_file(void);
 extern void Muxing_ivf_write_header(const rtvs_config_t *cfg, size_t frame_num);
 extern void Muxing_ivf_write_frame(const rtvs_frame_t *frame);
 
-extern void Packetizer_init();
+extern void Packetizer_init(void);
 extern void Packetizer_packetize(rtvs_frame_t *frame);
 
 extern void Frame_init_partitions(rtvs_frame_t *frame);
@@ -47,3 +47,8 @@ extern int Bed_get_bit(rtvs_bed_t *bed);
 extern int Bed_get_uint(rtvs_bed_t *bed, int bits);
 extern int Bed_get_int(rtvs_bed_t *bed, int bits);
 extern int Bed_maybe_get_int(rtvs_bed_t *bed, int bits);
+
+extern int Rtp_start(char *addr);
+extern int Rtp_stop(void);
+extern void Rtp_register(const rtvs_packet_t *packet, size_t size);
+extern int Rtp_send_frame(void);

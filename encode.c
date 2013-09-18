@@ -25,8 +25,11 @@ int Encoder_start(rtvs_config_t *cfg)
         vpx_cfg->rc_max_quantizer = 50;            /* Worst quality quantizer */
         vpx_cfg->g_pass = VPX_RC_ONE_PASS;         /* One encoding pass only */
         vpx_cfg->g_error_resilient = 1;            /* Enable error resilient mode */
+        /* TODO GOP placement */
         //vpx_cfg->kf_mode = VPX_KF_DISABLED;        /* GOP, Disable key frame placement (manual placement) */
         //vpx_cfg->kf_max_dist = 999999;
+        vpx_cfg->kf_mode = VPX_KF_AUTO;
+        vpx_cfg->kf_max_dist = 24;
         vpx_cfg->g_threads = cfg->thread_num;      /* Thread num */
         vpx_cfg->g_lag_in_frames = 0;              /* Disable cached frames */
         vpx_cfg->rc_dropframe_thresh = 1;          /* Allow frame dropping to meet the data rate requirements */

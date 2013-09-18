@@ -16,6 +16,7 @@ SRC_SEED = seed.c \
 	   packetizer.c \
 	   bed.c \
 	   frame.c \
+	   rtp.c \
 
 OBJ_SEED = $(SRC_SEED:.c=.o)
 

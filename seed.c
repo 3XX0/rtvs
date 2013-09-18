@@ -50,7 +50,7 @@ int main(int argc, char **argv)
         int           opt;
 
         const char    *mux_parm    = NULL;
-        const char    *stream_parm = NULL;
+        char          *stream_parm = NULL;
 
         rtvs_config_default(&cfg);
         while ((opt = getopt(argc, argv, "hs:m:d:f:x:b:c:t:")) != -1) {
@@ -69,7 +69,7 @@ int main(int argc, char **argv)
                         break;
                 case 'x':
                         cfg.width = atoi(optarg);
-                        cfg.height = atoi(strchr(optarg, 'x') + 1);
+                        cfg.height = atoi(strchr(optarg, 'x') + 1); /* TODO fix ugliness */
                         break;
                 case 'b':
                         cfg.bitrate = atoi(optarg);
@@ -85,19 +85,24 @@ int main(int argc, char **argv)
                 }
         }
 
+        /* Startup */
         if (Capture_start(&cfg) < 0)
                 err(1, "Could not start capturing");
         if (Encoder_start(&cfg) < 0)
                 errx(1, "Could not start encoding");
         if (mux_parm && Muxing_open_file(mux_parm) < 0)
                 err(1, "Could not open mux file");
-        if (stream_parm)
+        if (stream_parm) {
                 Packetizer_init();
+                if (Rtp_start(stream_parm) < 0)
+                        err(1, "Could not start RTP transport");
+        }
 
         printf("\n%s --- Configuration ---\n"
             " | device: %s\n | codec: %s\n | resolution: %ux%u\n | fps: %u\n | bitrate: %u\n | threads: %u%s\n\n",
             CBLUE, cfg.device, cfg.codec.name, cfg.width, cfg.height, cfg.framerate, cfg.bitrate, cfg.thread_num, CDFLT);
 
+        /* Capture loop */
         while (!_kbhit()) {
                 BZERO_ARRAY(frames)
                 if (Capture_get_frame(frames) < 0) {
@@ -112,17 +117,23 @@ int main(int argc, char **argv)
                         if (frames[i].flags != EMPTY) {
                                 if (mux_parm)
                                         Muxing_ivf_write_frame(frames + i);
-                                if (stream_parm)
+                                if (stream_parm) {
                                         Packetizer_packetize(frames + i);
+                                        if (Rtp_send_frame() < 0)
+                                                perror("Sending failed");
+                                }
                                 ++frame_num;
                         }
         }
 
+        /* Cleanup */
         if (mux_parm) {
                 Muxing_ivf_write_header(&cfg, frame_num);
                 if (Muxing_close_file() < 0)
                         err(1, "Could not close mux file");
         }
+        if (stream_parm && Rtp_stop() < 0)
+                err(1, "Could not stop RTP transport");
         if (Encoder_stop() < 0)
                 errx(1, "Could not stop encoding");
         if (Capture_stop() < 0)
