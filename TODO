@@ -1,0 +1,8 @@
+- RTCP based feedback RTP/AVPF : RFC 4585, 5506, 3550
+  RPSI/SLI and FIR synchronization
+
+- Forward error correction
+
+- Hardware encoding support
+
+- VP9 payload format for partitioning
