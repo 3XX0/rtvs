@@ -117,11 +117,8 @@ int main(int argc, char **argv)
                         if (frames[i].flags != EMPTY) {
                                 if (mux_parm)
                                         Muxing_ivf_write_frame(frames + i);
-                                if (stream_parm) {
-                                        Packetizer_packetize(frames + i);
-                                        if (Rtp_send_frame() < 0)
+                                if (stream_parm && Packetizer_packetize(frames + i) < 0)
                                                 perror("Sending failed");
-                                }
                                 ++frame_num;
                         }
         }

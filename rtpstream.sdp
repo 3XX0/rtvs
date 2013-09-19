@@ -1,7 +1,7 @@
 v=0
 o=- 0 0 IN IP4 127.0.0.1
-s=No Name
+s=RTP/AVP VP8 Stream
 c=IN IP4 127.0.0.1
 t=0 0
-m=video 1234 RTP/AVP 98
+m=video 51372 RTP/AVP 98
 a=rtpmap:98 VP8/90000

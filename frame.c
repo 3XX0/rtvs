@@ -44,13 +44,29 @@ static void skip_loopfilter_header(rtvs_bed_t *bed)
         }
 }
 
+/*
+ * VP8 Frame format :
+ *
+ * +---------------------------------+
+ * |         Frame header (3)        |
+ * +---------------------------------+
+ * |      Key frame header (7)       |
+ * +---------------------------------+
+ * |         First partition         |
+ * +---------------------------------+
+ * | Array of N partition size (Nx3) |
+ * +---------------------------------+
+ * |          N partitions           |
+ * +---------------------------------+
+ */
+
 void Frame_init_partitions(rtvs_frame_t *frame)
 {
         rtvs_bed_t bed;
 
         const rtvs_frame_header_t* const frame_hdr = (const rtvs_frame_header_t *) frame->data;
 
-        /* Get the 1st partition (frame header) */
+        /* Get the 1st partition */
         frame->partition_size[0] = frame_hdr->size0 | (frame_hdr->size1 << 3) | (frame_hdr->size2 << 11);
         frame->partition_num = 1;
 
