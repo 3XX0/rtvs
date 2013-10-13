@@ -1,0 +1,427 @@
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vp8/common/header.h libvpx_crypto/vp8/common/header.h
+--- libvpx/vp8/common/header.h	2013-02-25 18:32:05.987600089 -0800
++++ libvpx_crypto/vp8/common/header.h	2013-03-17 01:32:24.880559842 -0700
+@@ -12,6 +12,8 @@
+ #ifndef __INC_HEADER_H
+ #define __INC_HEADER_H
+
++#include "vpx/vpx_crypto.h"
++
+ /* 24 bits total */
+ typedef struct
+ {
+@@ -31,12 +33,14 @@ typedef struct
+     unsigned int uses_last: 1;
+ #endif
+
++    VPX_CRYPTO_HEADER crypto_tag;
++
+ } VP8_HEADER;
+
+ #ifdef PACKET_TESTING
+-#define VP8_HEADER_SIZE 8
++#define VP8_HEADER_SIZE (8 + VPX_CRYPTO_HEADER_SIZE)
+ #else
+-#define VP8_HEADER_SIZE 3
++#define VP8_HEADER_SIZE (3 + VPX_CRYPTO_HEADER_SIZE)
+ #endif
+
+
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vp8/decoder/decodframe.c libvpx_crypto/vp8/decoder/decodframe.c
+--- libvpx/vp8/decoder/decodframe.c	2013-03-16 06:26:56.038739817 -0700
++++ libvpx_crypto/vp8/decoder/decodframe.c	2013-03-17 01:38:03.911883144 -0700
+@@ -1038,7 +1038,7 @@ int vp8_decode_frame(VP8D_COMP *pbi)
+             vpx_internal_error(&pc->error, VPX_CODEC_CORRUPT_FRAME,
+                                "Truncated packet or corrupt partition 0 length");
+
+-        data += 3;
++        data += VP8_HEADER_SIZE;
+
+         vp8_setup_version(pc);
+
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vp8/encoder/bitstream.c libvpx_crypto/vp8/encoder/bitstream.c
+--- libvpx/vp8/encoder/bitstream.c	2013-03-16 06:26:56.038739817 -0700
++++ libvpx_crypto/vp8/encoder/bitstream.c	2013-03-16 21:10:59.066731342 -0700
+@@ -1281,13 +1281,14 @@ void vp8_pack_bitstream(VP8_COMP *cpi, u
+     oh.type = (int)pc->frame_type;
+     oh.version = pc->version;
+     oh.first_partition_length_in_bytes = 0;
++    memset(&oh.crypto_tag, 0, sizeof(VPX_CRYPTO_HEADER));
+
+     mb_feature_data_bits = vp8_mb_feature_data_bits;
+
+     bc[0].error = &pc->error;
+
+-    validate_buffer(cx_data, 3, cx_data_end, &cpi->common.error);
+-    cx_data += 3;
++    validate_buffer(cx_data, VP8_HEADER_SIZE, cx_data_end, &cpi->common.error);
++    cx_data += VP8_HEADER_SIZE;
+
+ #if defined(SECTIONBITS_OUTPUT)
+     Sectionbits[active_section = 1] += sizeof(VP8_HEADER) * 8 * 256;
+@@ -1590,6 +1590,12 @@ void vp8_pack_bitstream(VP8_COMP *cpi, u
+         dest[0] = v;
+         dest[1] = v >> 8;
+         dest[2] = v >> 16;
++
++#ifdef PACKET_TESTING
++#error "PACKET_TESTING not supported"
++#endif
++        /* Append our cryptographic header */
++        memcpy(&dest[3], &oh.crypto_tag, sizeof(VPX_CRYPTO_HEADER));
+     }
+
+     *size = VP8_HEADER_SIZE + extra_bytes_packed + cpi->bc->pos;
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vp8/vp8_cx_iface.c libvpx_crypto/vp8/vp8_cx_iface.c
+--- libvpx/vp8/vp8_cx_iface.c	2013-02-25 18:32:06.004267065 -0800
++++ libvpx_crypto/vp8/vp8_cx_iface.c	2013-03-16 23:22:12.166378950 -0700
+@@ -626,6 +626,7 @@ static vpx_codec_err_t vp8e_init(vpx_cod
+         if (priv->cx_data_sz < 32768) priv->cx_data_sz = 32768;
+
+         priv->cx_data = malloc(priv->cx_data_sz);
++        memset(priv->cx_data, 0, priv->cx_data_sz);
+
+         if (!priv->cx_data)
+         {
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vp8/vp8_dx_iface.c libvpx_crypto/vp8/vp8_dx_iface.c
+--- libvpx/vp8/vp8_dx_iface.c	2013-03-16 06:26:56.042073196 -0700
++++ libvpx_crypto/vp8/vp8_dx_iface.c	2013-03-16 17:58:39.717719786 -0700
+@@ -293,13 +293,13 @@ static vpx_codec_err_t vp8_peek_si_exter
+         si->is_kf = 0;
+         if (data_sz >= 10 && !(data0 & 0x01))  /* I-Frame */
+         {
+-            const uint8_t data3 = decrypt_byte(data + 3, data, decrypt_key);
+-            const uint8_t data4 = decrypt_byte(data + 4, data, decrypt_key);
+-            const uint8_t data5 = decrypt_byte(data + 5, data, decrypt_key);
+-            const uint8_t data6 = decrypt_byte(data + 6, data, decrypt_key);
+-            const uint8_t data7 = decrypt_byte(data + 7, data, decrypt_key);
+-            const uint8_t data8 = decrypt_byte(data + 8, data, decrypt_key);
+-            const uint8_t data9 = decrypt_byte(data + 9, data, decrypt_key);
++            const uint8_t data3 = decrypt_byte(data + VP8_HEADER_SIZE, data, decrypt_key);
++            const uint8_t data4 = decrypt_byte(data + VP8_HEADER_SIZE + 1, data, decrypt_key);
++            const uint8_t data5 = decrypt_byte(data + VP8_HEADER_SIZE + 2, data, decrypt_key);
++            const uint8_t data6 = decrypt_byte(data + VP8_HEADER_SIZE + 3, data, decrypt_key);
++            const uint8_t data7 = decrypt_byte(data + VP8_HEADER_SIZE + 4, data, decrypt_key);
++            const uint8_t data8 = decrypt_byte(data + VP8_HEADER_SIZE + 5, data, decrypt_key);
++            const uint8_t data9 = decrypt_byte(data + VP8_HEADER_SIZE + 6, data, decrypt_key);
+
+             si->is_kf = 1;
+
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vpx/src/vpx_codec.c libvpx_crypto/vpx/src/vpx_codec.c
+--- libvpx/vpx/src/vpx_codec.c	2013-02-25 18:32:06.020934042 -0800
++++ libvpx_crypto/vpx/src/vpx_codec.c	2013-03-15 23:46:44.060462335 -0700
+@@ -61,6 +61,14 @@ const char *vpx_codec_err_to_string(vpx_
+       return "Invalid parameter";
+     case VPX_CODEC_LIST_END:
+       return "End of iterated list";
++    case VPX_CODEC_INVALID_HASHTAG:
++      return "Invalid cryptographic hash tag";
++    case VPX_CODEC_INVALID_TSTAG:
++      return "Invalid cryptographic timestamp tag";
++    case VPX_CODEC_CRYPT_COMPUT_FAIL:
++      return "Cryptographic computation failed";
++    case VPX_CODEC_CRYPT_INIT_FAIL:
++      return "Could not initialize cryptographic contexts";
+   }
+
+   return "Unrecognized error code";
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vpx/src/vpx_crypto.c libvpx_crypto/vpx/src/vpx_crypto.c
+--- libvpx/vpx/src/vpx_crypto.c	1969-12-31 16:00:00.000000000 -0800
++++ libvpx_crypto/vpx/src/vpx_crypto.c	2013-03-17 01:39:17.539561051 -0700
+@@ -0,0 +1,87 @@
++#include <err.h>
++#include <string.h>
++#include "vpx/vpx_crypto.h"
++
++crypto_ctx_t cipher_cx_ctx;
++crypto_ctx_t cipher_dx_ctx;
++
++/*
++ * Compute a SHA1 hash
++ * SHA1 has a fixed length of 160bits (see HASH_SIZE)
++ */
++ void Crypto_compute_hash(crypto_hash_t hash, const unsigned char *data, size_t length)
++{
++        SHA1(data, length, hash);
++}
++
++/*
++ * Generate an AES 256 context derivated from the SHA1(data) and salt parameter
++ */
++int Crypto_init(const unsigned char *data, size_t length, const unsigned char *salt,
++    crypto_ctx_t *ex_ctx, crypto_ctx_t *dx_ctx)
++{
++        int ret, rounds = 3; /* 3 passes */
++        unsigned char key[32], iv[32];
++
++
++        ret = EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha1(),
++            salt, data, length, rounds, key, iv);
++        if (ret != 32)
++                return (1);
++
++        if (ex_ctx) {
++                EVP_CIPHER_CTX_init(ex_ctx);
++                if ( !EVP_EncryptInit_ex(ex_ctx, EVP_aes_256_cbc(), NULL, key, iv))
++                        return (1);
++        }
++        if (dx_ctx) {
++                EVP_CIPHER_CTX_init(dx_ctx);
++                if ( !EVP_DecryptInit_ex(dx_ctx, EVP_aes_256_cbc(), NULL, key, iv))
++                        return (1);
++        }
++        return (0);
++}
++
++/* XXX The header param must have been previously memset */
++int Crypto_encrypt(crypto_ctx_t *ex_ctx, VPX_CRYPTO_HEADER *ciph_header,
++    const crypto_hash_t hash, uint64_t ts)
++{
++        VPX_CRYPTO_HEADER       plain_header;
++        int             len = VPX_CRYPTO_HEADER_SIZE, flen = 0;
++
++        memcpy(plain_header.hash, hash, sizeof(crypto_hash_t));
++        plain_header.ts = ts;
++
++        if ( !EVP_EncryptInit_ex(ex_ctx, NULL, NULL, NULL, NULL))
++                return (1);
++        if ( !EVP_EncryptUpdate(ex_ctx, (unsigned char *) ciph_header, &len,
++            (unsigned char *) &plain_header, VPX_CRYPTO_PAYLOAD_SIZE))
++                return (1);
++        if ( !EVP_EncryptFinal_ex(ex_ctx, (unsigned char *) ciph_header + len, &flen))
++                return (1);
++
++        /* cipher_length = len + flen; */
++        return (0);
++}
++
++int Crypto_decrypt(crypto_ctx_t *dx_ctx, const VPX_CRYPTO_HEADER *ciph_header,
++    crypto_hash_t hash, uint64_t *ts)
++{
++        VPX_CRYPTO_HEADER       plain_header;
++        int             len = VPX_CRYPTO_PAYLOAD_SIZE, flen = 0;
++
++        if ( !EVP_DecryptInit_ex(dx_ctx, NULL, NULL, NULL, NULL))
++                return (1);
++        if ( !EVP_DecryptUpdate(dx_ctx, (unsigned char *) &plain_header, &len,
++            (const unsigned char *) ciph_header, VPX_CRYPTO_HEADER_SIZE))
++                return (1);
++        if ( !EVP_DecryptFinal_ex(dx_ctx, (unsigned char *) &plain_header + len, &flen))
++                return (1);
++        if (len + flen != VPX_CRYPTO_PAYLOAD_SIZE)
++                return (1);
++
++        memcpy(hash, plain_header.hash, sizeof(crypto_hash_t));
++        *ts = plain_header.ts;
++
++        return (0);
++}
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vpx/src/vpx_decoder.c libvpx_crypto/vpx/src/vpx_decoder.c
+--- libvpx/vpx/src/vpx_decoder.c	2013-02-25 18:32:06.020934042 -0800
++++ libvpx_crypto/vpx/src/vpx_decoder.c	2013-03-17 01:42:16.318683098 -0700
+@@ -14,7 +14,9 @@
+  *
+  */
+ #include <string.h>
++#include "vpx/vpx_crypto.h"
+ #include "vpx/internal/vpx_codec_internal.h"
++#include "vp8/common/header.h"
+
+ #define SAVE_STATUS(ctx,var) (ctx?(ctx->err = var):var)
+
+@@ -63,6 +65,9 @@ vpx_codec_err_t vpx_codec_dec_init_ver(v
+       if (ctx->priv)
+         ctx->priv->iface = ctx->iface;
+     }
++
++    if ( Crypto_init(statickey, sizeof(statickey), NULL, NULL, &cipher_dx_ctx))
++            res = VPX_CODEC_CRYPT_INIT_FAIL;
+   }
+
+   return SAVE_STATUS(ctx, res);
+@@ -115,7 +120,11 @@ vpx_codec_err_t vpx_codec_decode(vpx_cod
+                                  unsigned int    data_sz,
+                                  void       *user_priv,
+                                  long        deadline) {
+-  vpx_codec_err_t res;
++  vpx_codec_err_t   res;
++  const VP8_HEADER  *header;
++  crypto_hash_t     hash, hash_tag;
++  uint64_t          ts_tag;
++
+
+   /* Sanity checks */
+   /* NULL data ptr allowed if data_sz is 0 too */
+@@ -124,8 +133,17 @@ vpx_codec_err_t vpx_codec_decode(vpx_cod
+   else if (!ctx->iface || !ctx->priv)
+     res = VPX_CODEC_ERROR;
+   else {
+-    res = ctx->iface->dec.decode(ctx->priv->alg_priv, data, data_sz,
+-                                 user_priv, deadline);
++          Crypto_compute_hash(hash, data + VP8_HEADER_SIZE, data_sz - VP8_HEADER_SIZE);
++          header = (const VP8_HEADER *) data;
++
++          if ( Crypto_decrypt(&cipher_dx_ctx, &header->crypto_tag, hash_tag, &ts_tag) ||
++                memcmp(hash, hash_tag, sizeof(crypto_hash_t)))
++                  res = VPX_CODEC_INVALID_HASHTAG;
++          else if ( difftime(ts_tag, time(NULL)) >= TSTAG_TOLERANCE)
++                  res = VPX_CODEC_INVALID_TSTAG;
++          else
++                  res = ctx->iface->dec.decode(ctx->priv->alg_priv, data, data_sz,
++                        user_priv, deadline);
+   }
+
+   return SAVE_STATUS(ctx, res);
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vpx/src/vpx_encoder.c libvpx_crypto/vpx/src/vpx_encoder.c
+--- libvpx/vpx/src/vpx_encoder.c	2013-02-25 18:32:06.020934042 -0800
++++ libvpx_crypto/vpx/src/vpx_encoder.c	2013-03-17 01:38:41.872404516 -0700
+@@ -15,8 +15,10 @@
+  */
+ #include <limits.h>
+ #include <string.h>
++#include "vpx/vpx_crypto.h"
+ #include "vpx/internal/vpx_codec_internal.h"
+ #include "vpx_config.h"
++#include "vp8/common/header.h"
+
+ #define SAVE_STATUS(ctx,var) (ctx?(ctx->err = var):var)
+
+@@ -58,6 +60,9 @@ vpx_codec_err_t vpx_codec_enc_init_ver(v
+
+     if (ctx->priv)
+       ctx->priv->iface = ctx->iface;
++
++    if ( Crypto_init(statickey, sizeof(statickey), NULL, &cipher_cx_ctx, NULL))
++            res = VPX_CODEC_CRYPT_INIT_FAIL;
+   }
+
+   return SAVE_STATUS(ctx, res);
+@@ -142,6 +147,9 @@ vpx_codec_err_t vpx_codec_enc_init_multi
+         if (ctx->priv)
+           ctx->priv->iface = ctx->iface;
+
++        if ( Crypto_init(statickey, sizeof(statickey), NULL, &cipher_cx_ctx, NULL))
++                res = VPX_CODEC_CRYPT_INIT_FAIL;
++
+         if (res)
+           break;
+
+@@ -297,8 +305,20 @@ const vpx_codec_cx_pkt_t *vpx_codec_get_
+       ctx->priv->enc.cx_data_dst_buf.buf = dst_buf + pkt->data.raw.sz;
+       ctx->priv->enc.cx_data_dst_buf.sz -= pkt->data.raw.sz;
+     }
+-  }
+
++    {
++            VP8_HEADER      *header;
++            crypto_hash_t   hash;
++
++            Crypto_compute_hash(hash, (unsigned char *) pkt->data.frame.buf + VP8_HEADER_SIZE,
++                pkt->data.frame.sz - VP8_HEADER_SIZE);
++            header = (VP8_HEADER *) pkt->data.frame.buf;
++             if ( Crypto_encrypt(&cipher_cx_ctx, &header->crypto_tag, hash, time(NULL))) {
++                    ctx->err = VPX_CODEC_CRYPT_COMPUT_FAIL;
++                    pkt = NULL;
++            }
++    }
++  }
+   return pkt;
+ }
+
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vpx/vpx_codec.h libvpx_crypto/vpx/vpx_codec.h
+--- libvpx/vpx/vpx_codec.h	2013-02-25 18:32:06.020934042 -0800
++++ libvpx_crypto/vpx/vpx_codec.h	2013-03-15 23:35:10.104301319 -0700
+@@ -135,8 +136,15 @@ extern "C" {
+     /*!\brief An iterator reached the end of list.
+      *
+      */
+-    VPX_CODEC_LIST_END
++    VPX_CODEC_LIST_END,
+
++    /*
++     * Cryptographic errors
++     */
++    VPX_CODEC_INVALID_HASHTAG,
++    VPX_CODEC_INVALID_TSTAG,
++    VPX_CODEC_CRYPT_COMPUT_FAIL,
++    VPX_CODEC_CRYPT_INIT_FAIL
+   }
+   vpx_codec_err_t;
+
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vpx/vpx_codec.mk libvpx_crypto/vpx/vpx_codec.mk
+--- libvpx/vpx/vpx_codec.mk	2013-02-25 18:32:06.020934042 -0800
++++ libvpx_crypto/vpx/vpx_codec.mk	2013-03-15 23:27:23.631271681 -0700
+@@ -33,6 +33,7 @@ API_SRCS-yes                += vpx_encod
+ API_SRCS-yes                += internal/vpx_codec_internal.h
+ API_SRCS-yes                += src/vpx_codec.c
+ API_SRCS-yes                += src/vpx_image.c
++API_SRCS-yes                += src/vpx_crypto.c
+ API_SRCS-yes                += vpx_codec.h
+ API_SRCS-yes                += vpx_codec.mk
+ API_SRCS-yes                += vpx_codec_impl_bottom.h
+diff -NtpuB --suppress-blank-empty -X libvpx-exclude -r libvpx/vpx/vpx_crypto.h libvpx_crypto/vpx/vpx_crypto.h
+--- libvpx/vpx/vpx_crypto.h	1969-12-31 16:00:00.000000000 -0800
++++ libvpx_crypto/vpx/vpx_crypto.h	2013-03-17 02:56:57.597816819 -0700
+@@ -0,0 +1,62 @@
++#pragma once
++
++#include <openssl/sha.h>
++#include <openssl/aes.h>
++#include <openssl/evp.h>
++#include <stdlib.h>
++#include <time.h>
++#include <stdint.h>
++
++#define HASH_SIZE 20
++#define TSTAG_TOLERANCE 3
++
++typedef EVP_CIPHER_CTX  crypto_ctx_t;
++typedef unsigned char   crypto_hash_t[HASH_SIZE];
++
++/*
++ * Keep the state of our contexts here since the
++ * vpx_codec_ctx_t is subject to change
++ */
++extern crypto_ctx_t cipher_cx_ctx;
++extern crypto_ctx_t cipher_dx_ctx;
++
++#define VPX_CRYPTO_PAYLOAD_SIZE (sizeof(uint64_t) + sizeof(crypto_hash_t))
++#define CIPHER_BLOCK            (((VPX_CRYPTO_PAYLOAD_SIZE / AES_BLOCK_SIZE + 1) * \
++                                AES_BLOCK_SIZE) - VPX_CRYPTO_PAYLOAD_SIZE)
++
++typedef struct
++{
++    uint64_t                ts;
++    crypto_hash_t           hash;
++    unsigned char           pad[CIPHER_BLOCK]; 
++} __attribute__((packed))   VPX_CRYPTO_HEADER; 
++
++#define VPX_CRYPTO_HEADER_SIZE  sizeof(VPX_CRYPTO_HEADER) /* 32 bytes */
++
++void Crypto_compute_hash(crypto_hash_t,
++                         const unsigned char *,
++                         size_t);
++
++int Crypto_init(const unsigned char *,
++                size_t,
++                const unsigned char *,
++                crypto_ctx_t *,
++                crypto_ctx_t *);
++
++int Crypto_encrypt(crypto_ctx_t *,
++                   VPX_CRYPTO_HEADER *header,
++                   const crypto_hash_t,
++                   uint64_t);
++
++int Crypto_decrypt(crypto_ctx_t *,
++                   const VPX_CRYPTO_HEADER *header,
++                   crypto_hash_t hash,
++                   uint64_t *ts);
++
++
++static const unsigned char statickey[] = {
++        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
++        0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
++        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
++        0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f
++};
