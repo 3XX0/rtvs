@@ -2,6 +2,12 @@
 
 #include "codec.h"
 
+enum
+{
+    VP8,
+    VP9
+};
+
 typedef struct
 {
         const char   *device;
