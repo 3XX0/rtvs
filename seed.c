@@ -53,7 +53,7 @@ int main(int argc, char **argv)
         char          *stream_parm = NULL;
 
         rtvs_config_default(&cfg);
-        while ((opt = getopt(argc, argv, "hs:m:d:f:x:b:c:t:")) != -1) {
+        while ((opt = getopt(argc, argv, "qhs:m:d:f:x:b:c:t:")) != -1) {
                 switch (opt) {
                 case 's':
                         stream_parm = optarg;
@@ -77,9 +77,12 @@ int main(int argc, char **argv)
                 case 't':
                         cfg.thread_num = atoi(optarg);
                         break;
+                case 'q':
+                        freopen("/dev/null", "w", stdout);
+                        break;
                 case 'h':
                 default:
-                        fprintf(stderr, "Usage: %s [-h] [-s ip:port] [-m file.ivf] [-d device] [-f framerate]"
+                        fprintf(stderr, "Usage: %s [-qh] [-s ip:port] [-m file.ivf] [-d device] [-f framerate]"
                             " [-x widthxheight] [-b bitrate] [-t threads]\n", argv[0]);
                         exit(0);
                 }

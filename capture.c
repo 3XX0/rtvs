@@ -77,7 +77,10 @@ int Capture_start(rtvs_config_t *cfg)
         setfps.parm.capture.timeperframe.denominator = cfg->framerate;
         FAIL_ON_NEGATIVE(ioctl(fd, VIDIOC_S_PARM, &setfps))
         assert(setfps.parm.capture.timeperframe.numerator == 1);
-        cfg->framerate = setfps.parm.capture.timeperframe.denominator;
+        if (cfg->framerate != setfps.parm.capture.timeperframe.denominator) {
+                printf("%sDriver has changed the requested framerate%s\n", CRED, CDFLT);
+                cfg->framerate = setfps.parm.capture.timeperframe.denominator;
+        }
 
         /* Fetch device frame buffers */
         BZERO_STRUCT(reqb)
