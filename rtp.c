@@ -12,10 +12,11 @@ static struct sockaddr_in saddr;
 int Rtp_start(char *addr)
 {
         uint16_t port;
-        char     *p = strchr(addr, ':');
+        char     *p;
 
+        FAIL_ON_NULL(p = strchr(addr, ':'))
         *p = '\0';
-        port = atoi(p + 1); /* TODO fix ugliness */
+        port = atoi(p + 1);
 
         FAIL_ON_NEGATIVE(sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP))
         BZERO_STRUCT(saddr)

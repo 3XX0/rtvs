@@ -93,9 +93,13 @@ int main(int argc, char **argv)
                         cfg.framerate = atoi(optarg);
                         break;
                 case 'x':
+                {
+                        char *p;
+                        FAIL_ON_NULL(p = strchr(optarg, 'x'))
                         cfg.width = atoi(optarg);
-                        cfg.height = atoi(strchr(optarg, 'x') + 1); /* TODO fix ugliness */
+                        cfg.height = atoi(p + 1);
                         break;
+                }
                 case 'b':
                         cfg.bitrate = atoi(optarg);
                         break;
@@ -146,7 +150,7 @@ int main(int argc, char **argv)
                                 if (mux_parm)
                                         Muxing_ivf_write_frame(frames + i);
                                 if (stream_parm && Packetizer_packetize(frames + i) < 0)
-                                                perror("Sending failed");
+                                        perror("Sending failed");
                                 ++frame_num;
                         }
         }
