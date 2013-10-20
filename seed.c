@@ -1,7 +1,9 @@
 #include <stdlib.h>
+#include <signal.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <err.h>
+#include <string.h>
 #include <sys/select.h>
 
 #include "rtvs.h"
@@ -9,7 +11,9 @@
 #include <vpx/vp8cx.h>
 #include <vpx/vp8dx.h>
 
-static void rtvs_config_default(rtvs_config_t *cfg)
+static volatile int sigcatch = 0;
+
+static void rtvs_config_default(rtvs_config_t *cfg, int codec)
 {
         cfg->device         = "/dev/video0";
         cfg->framerate      = 30;
@@ -22,6 +26,11 @@ static void rtvs_config_default(rtvs_config_t *cfg)
         cfg->codec.cx_iface = &vpx_codec_vp8_cx;
         cfg->codec.dx_iface = &vpx_codec_vp8_dx;
         cfg->codec.fourcc   = VP8_FOURCC;
+
+static void sig_handler(int sig)
+{
+        printf("Received signal: %s, exiting...\n", strsignal(sig));
+        sigcatch = 1;
 }
 
 static int _kbhit(void)
@@ -44,15 +53,22 @@ static int _kbhit(void)
 /* TODO Handle vpx error codes */
 int main(int argc, char **argv)
 {
-        rtvs_frame_t  frames[MAX_SIMULT_FRAMES];
-        size_t        frame_num = 0;
-        rtvs_config_t cfg;
-        int           opt;
+        struct sigaction act;
+        rtvs_frame_t     frames[MAX_SIMULT_FRAMES];
+        size_t           frame_num = 0;
+        rtvs_config_t    cfg;
+        int              opt;
 
-        const char    *mux_parm    = NULL;
-        char          *stream_parm = NULL;
+        const char       *mux_parm    = NULL;
+        char             *stream_parm = NULL;
 
-        rtvs_config_default(&cfg);
+        BZERO_STRUCT(act)
+        act.sa_handler = &sig_handler;
+        FAIL_ON_NEGATIVE(sigaction(SIGTERM, &act, NULL))
+        FAIL_ON_NEGATIVE(sigaction(SIGQUIT, &act, NULL))
+        FAIL_ON_NEGATIVE(sigaction(SIGINT, &act, NULL))
+
+        rtvs_config_default(&cfg, VP8);
         while ((opt = getopt(argc, argv, "qhs:m:d:f:x:b:c:t:")) != -1) {
                 switch (opt) {
                 case 's':
@@ -106,7 +122,7 @@ int main(int argc, char **argv)
             CBLUE, cfg.device, cfg.codec.name, cfg.width, cfg.height, cfg.framerate, cfg.bitrate, cfg.thread_num, CDFLT);
 
         /* Capture loop */
-        while (!_kbhit()) {
+        while (!_kbhit() && !sigcatch) {
                 BZERO_ARRAY(frames)
                 if (Capture_get_frame(frames) < 0) {
                         perror("Fetching frame failed");
