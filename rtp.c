@@ -34,12 +34,12 @@ int Rtp_stop(void)
         return (0);
 }
 
-int Rtp_send(rtvs_packet_t packet, size_t size)
+int Rtp_send(rtvs_packet_t packet, size_t payload_size)
 {
         /* Format endianness sensitive fields */
         packet.seqnum = htons(packet.seqnum);
         packet.timestamp = htonl(packet.timestamp);
         packet.ssrc = htonl(packet.ssrc);
-        FAIL_ON_NEGATIVE(sendto(sock, &packet, size, 0, (struct sockaddr*) &saddr, sizeof(saddr)))
+        FAIL_ON_NEGATIVE(sendto(sock, &packet, RTP_HEADER_SIZE + payload_size, 0, (struct sockaddr*) &saddr, sizeof(saddr)))
         return (0);
 }
