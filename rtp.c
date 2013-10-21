@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
@@ -13,12 +14,15 @@ int Rtp_start(char *addr)
 {
         uint16_t port;
         char     *p;
+        char     loop = 0;
 
         FAIL_ON_NULL(p = strchr(addr, ':'))
         *p = '\0';
         port = atoi(p + 1);
 
         FAIL_ON_NEGATIVE(sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP))
+        FAIL_ON_NEGATIVE(fcntl(sock, F_SETFL, O_NONBLOCK))
+        FAIL_ON_NEGATIVE(setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(char)))
         BZERO_STRUCT(saddr)
         saddr.sin_family = AF_INET;
         saddr.sin_port = htons(port);
@@ -26,6 +30,7 @@ int Rtp_start(char *addr)
                 return (-1);
         else if (*addr == '\0')
                 saddr.sin_addr.s_addr = htonl(INADDR_ANY);
+        FAIL_ON_NEGATIVE(connect(sock, (const struct sockaddr *) &saddr, sizeof(saddr)))
         return (0);
 }
 
