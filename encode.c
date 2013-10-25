@@ -45,7 +45,7 @@ int Encoder_start(rtvs_config_t *cfg)
         vpx_codec_control(&codec, VP8E_SET_ENABLEAUTOALTREF, 0);                /* Disable automatic reference frames */
         if (cfg->thread_num > 1)
                 vpx_codec_control(&codec, VP8E_SET_TOKEN_PARTITIONS, VP8_FOUR_TOKENPARTITION); /* Split the coefficient encoding for parallel processing */
-#ifdef USE_VP9
+#ifdef HAS_VP9_SUPPORT
         if (CONFIG_VP9(cfg))
                 vpx_codec_control(&codec, VP9E_SET_FRAME_PARALLEL_DECODING, 1); /* Enable parallel decoding */
 #endif

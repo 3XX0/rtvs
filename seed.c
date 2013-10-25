@@ -28,12 +28,14 @@ static void rtvs_config_default(rtvs_config_t *cfg, int codec)
                 cfg->codec.dx_iface = &vpx_codec_vp8_dx;
                 cfg->codec.fourcc   = VP8_FOURCC;
         }
+#ifdef HAS_VP9_SUPPORT
         else if (codec == VP9) {
                 cfg->codec.name     = "VP9";
                 cfg->codec.cx_iface = &vpx_codec_vp9_cx;
                 cfg->codec.dx_iface = &vpx_codec_vp9_dx;
                 cfg->codec.fourcc   = VP9_FOURCC;
         }
+#endif
 }
 
 static void sig_handler(int sig)
