@@ -9,12 +9,24 @@ static vpx_codec_ctx_t   codec;
 static vpx_image_t       yuyv_img;
 static vpx_image_t       yuv420_img;
 static struct SwsContext *scale_ctx;
+static const char        *vpx_err;
+
+void Encoder_perror(const char *err)
+{
+        if (vpx_err == NULL)
+                vpx_err = "Unknown error";
+        fprintf(stderr, "%s: %s\n", err, vpx_err);
+}
 
 int Encoder_start(rtvs_config_t *cfg)
 {
         vpx_codec_enc_cfg_t* const vpx_cfg = &cfg->codec.vpx_cfg;
+        vpx_codec_err_t            err;
 
-        FAIL_ON_NONZERO(vpx_codec_enc_config_default(cfg->codec.cx_iface(), vpx_cfg, 0))
+        if ((err = vpx_codec_enc_config_default(cfg->codec.cx_iface(), vpx_cfg, 0))) {
+                vpx_err = vpx_codec_err_to_string(err);
+                return (-1);
+        }
 
         vpx_cfg->rc_target_bitrate = cfg->bitrate; /* Stream data rate in kb/s */
         vpx_cfg->g_h = cfg->height;                /* Frame resolution */
@@ -38,11 +50,14 @@ int Encoder_start(rtvs_config_t *cfg)
         vpx_cfg->rc_buf_initial_sz = 4000;
         vpx_cfg->rc_buf_optimal_sz = 5000;
 
-        FAIL_ON_NONZERO(vpx_codec_enc_init(&codec, cfg->codec.cx_iface(), vpx_cfg, 0))
+        if (vpx_codec_enc_init(&codec, cfg->codec.cx_iface(), vpx_cfg, 0)) {
+                vpx_err = vpx_codec_error(&codec);
+                return (-1);
+        }
 
-        vpx_codec_control(&codec, VP8E_SET_CPUUSED, 4);                         /* CPU utilisation bound */
-        vpx_codec_control(&codec, VP8E_SET_STATIC_THRESHOLD, 500);              /* Control the threshold on blocks encoding (< 1000)*/
-        vpx_codec_control(&codec, VP8E_SET_ENABLEAUTOALTREF, 0);                /* Disable automatic reference frames */
+        vpx_codec_control(&codec, VP8E_SET_CPUUSED, 4);             /* CPU utilisation bound */
+        vpx_codec_control(&codec, VP8E_SET_STATIC_THRESHOLD, 500);  /* Control the threshold on blocks encoding (< 1000)*/
+        vpx_codec_control(&codec, VP8E_SET_ENABLEAUTOALTREF, 0);    /* Disable automatic reference frames */
         if (cfg->thread_num > 1)
                 vpx_codec_control(&codec, VP8E_SET_TOKEN_PARTITIONS, VP8_FOUR_TOKENPARTITION); /* Split the coefficient encoding for parallel processing */
 #ifdef HAS_VP9_SUPPORT
@@ -51,20 +66,24 @@ int Encoder_start(rtvs_config_t *cfg)
 #endif
 
         /* Initialize scaling context for subsampling conversion 4:2:2 -> 4:2:0 */
-        scale_ctx = sws_getContext(cfg->width, cfg->height, PIX_FMT_YUYV422,
-            cfg->width, cfg->height, PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+        FAIL_ON_NULL(scale_ctx = sws_getContext(cfg->width, cfg->height, PIX_FMT_YUYV422,
+            cfg->width, cfg->height, PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL))
 
         FAIL_ON_ZERO(vpx_img_alloc(&yuv420_img, VPX_IMG_FMT_I420, cfg->width, cfg->height, 1))
         FAIL_ON_ZERO(vpx_img_alloc(&yuyv_img, VPX_IMG_FMT_YUY2, cfg->width, cfg->height, 1))
         return (0);
 }
 
-int Encoder_stop(void)
+void Encoder_stop(void)
 {
         vpx_img_free(&yuv420_img);
         vpx_img_free(&yuyv_img);
-        FAIL_ON_NONZERO(vpx_codec_destroy(&codec))
-        return (0);
+        sws_freeContext(scale_ctx);
+        if (vpx_codec_destroy(&codec)) {
+                vpx_err = vpx_codec_error(&codec);
+                Encoder_perror(__FUNCTION__);
+        }
+        vpx_err = NULL;
 }
 
 int Encoder_encode_frame(const rtvs_config_t *cfg, rtvs_frame_t *frames)
@@ -87,7 +106,10 @@ int Encoder_encode_frame(const rtvs_config_t *cfg, rtvs_frame_t *frames)
         FAIL_ON_NEGATIVE(sws_scale(scale_ctx, (const uint8_t * const *) yuyv_img.planes, yuyv_img.stride,
             0, cfg->height, yuv420_img.planes, yuv420_img.stride))
 
-        FAIL_ON_NONZERO(vpx_codec_encode(&codec, &yuv420_img, pts, duration, 0, VPX_DL_REALTIME))
+        if (vpx_codec_encode(&codec, &yuv420_img, pts, duration, 0, VPX_DL_REALTIME)) {
+                vpx_err = vpx_codec_error(&codec);
+                return (-1);
+        }
         while ((pkt = vpx_codec_get_cx_data(&codec, &iter))) {
                 if (pkt->kind == VPX_CODEC_CX_FRAME_PKT) {
                         frames->flags = SOFT_ENCODED;

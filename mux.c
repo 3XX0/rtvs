@@ -25,11 +25,13 @@ int Muxing_open_file(const char *outfile)
         return (0);
 }
 
-int Muxing_close_file(void)
+void Muxing_close_file(void)
 {
-        if (fclose(fp) == EOF)
-                return (-1);
-        return (0);
+        if (fp) {
+                if (fclose(fp) == EOF)
+                        perror(__FUNCTION__);
+                fp = NULL;
+        }
 }
 
 void Muxing_ivf_write_header(const rtvs_config_t *cfg, size_t frame_num)

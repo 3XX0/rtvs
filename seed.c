@@ -11,7 +11,7 @@
 #include <vpx/vp8cx.h>
 #include <vpx/vp8dx.h>
 
-static volatile int sigcatch = 0;
+static volatile int sigcatch;
 
 static void rtvs_config_default(rtvs_config_t *cfg, int codec)
 {
@@ -75,14 +75,19 @@ int main(int argc, char **argv)
 
         BZERO_STRUCT(act)
         act.sa_handler = &sig_handler;
-        FAIL_ON_NEGATIVE(sigaction(SIGTERM, &act, NULL))
-        FAIL_ON_NEGATIVE(sigaction(SIGQUIT, &act, NULL))
-        FAIL_ON_NEGATIVE(sigaction(SIGINT, &act, NULL))
+        if (sigaction(SIGTERM, &act, NULL) < 0 ||
+            sigaction(SIGQUIT, &act, NULL) < 0 ||
+            sigaction(SIGINT, &act, NULL) < 0) {
+                perror("Could not setup signal handlers");
+                return (-1);
+        }
 
         rtvs_config_default(&cfg, VP8);
         while ((opt = getopt(argc, argv, "qhs:m:d:f:x:b:c:t:")) != -1) {
                 switch (opt) {
                 case 's':
+                        if (strchr(optarg, ':') == NULL)
+                                goto usage;
                         stream_parm = optarg;
                         break;
                 case 'm':
@@ -97,7 +102,8 @@ int main(int argc, char **argv)
                 case 'x':
                 {
                         char *p;
-                        FAIL_ON_NULL(p = strchr(optarg, 'x'))
+                        if ((p = strchr(optarg, 'x')) == NULL)
+                                goto usage;
                         cfg.width = atoi(optarg);
                         cfg.height = atoi(p + 1);
                         break;
@@ -111,25 +117,34 @@ int main(int argc, char **argv)
                 case 'q':
                         freopen("/dev/null", "w", stdout);
                         break;
+usage:
                 case 'h':
                 default:
-                        fprintf(stderr, "Usage: %s [-qh] [-s ip:port] [-m file.ivf] [-d device] [-f framerate]"
+                        fprintf(stderr, "Usage: %s [-qh] [-s [ip]:port] [-m file.ivf] [-d device] [-f framerate]"
                             " [-x widthxheight] [-b bitrate] [-t threads]\n", argv[0]);
                         exit(0);
                 }
         }
 
         /* Startup */
-        if (Capture_start(&cfg) < 0)
-                err(1, "Could not start capturing");
-        if (Encoder_start(&cfg) < 0)
-                errx(1, "Could not start encoding");
-        if (mux_parm && Muxing_open_file(mux_parm) < 0)
-                err(1, "Could not open mux file");
+        if (Capture_start(&cfg) < 0) {
+                perror("Could not start capturing");
+                goto cleanup;
+        }
+        if (Encoder_start(&cfg) < 0) {
+                Encoder_perror("Could not start encoding");
+                goto cleanup;
+        }
+        if (mux_parm && Muxing_open_file(mux_parm) < 0) {
+                perror("Could not open mux file");
+                goto cleanup;
+        }
         if (stream_parm) {
                 Packetizer_init();
-                if (Rtp_start(stream_parm) < 0)
-                        err(1, "Could not start RTP transport");
+                if (Rtp_start(stream_parm) < 0) {
+                        perror("Could not start RTP transport");
+                        goto cleanup;
+                }
         }
 
         printf("\n%s --- Configuration ---\n"
@@ -144,7 +159,7 @@ int main(int argc, char **argv)
                         continue;
                 }
                 if (Encoder_encode_frame(&cfg, frames) < 0) {
-                        fprintf(stderr, "Encoding frame failed\n");
+                        Encoder_perror("Encoding frame failed");
                         continue;
                 }
                 for (int i = 0; i < MAX_SIMULT_FRAMES; ++i)
@@ -157,18 +172,15 @@ int main(int argc, char **argv)
                         }
         }
 
-        /* Cleanup */
+cleanup: /* Cleanup */
+        if (stream_parm)
+                Rtp_stop();
         if (mux_parm) {
                 Muxing_ivf_write_header(&cfg, frame_num);
-                if (Muxing_close_file() < 0)
-                        err(1, "Could not close mux file");
+                Muxing_close_file();
         }
-        if (stream_parm && Rtp_stop() < 0)
-                err(1, "Could not stop RTP transport");
-        if (Encoder_stop() < 0)
-                errx(1, "Could not stop encoding");
-        if (Capture_stop() < 0)
-                err(1, "Could not stop capturing");
+        Encoder_stop();
+        Capture_stop();
 
         return (0);
 }

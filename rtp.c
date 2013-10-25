@@ -2,12 +2,13 @@
 #include <assert.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
 #include "rtvs.h"
 
-static int                sock;
+static int                sock = -1;
 static struct sockaddr_in saddr;
 
 int Rtp_start(char *addr)
@@ -16,7 +17,7 @@ int Rtp_start(char *addr)
         char     *p;
         char     loop = 0;
 
-        FAIL_ON_NULL(p = strchr(addr, ':'))
+        p = strchr(addr, ':');
         *p = '\0';
         port = atoi(p + 1);
 
@@ -34,10 +35,12 @@ int Rtp_start(char *addr)
         return (0);
 }
 
-int Rtp_stop(void)
+void Rtp_stop(void)
 {
-        FAIL_ON_NEGATIVE(close(sock))
-        return (0);
+        if (sock > 0) {
+                PERR_ON_NEGATIVE(close(sock))
+                sock = -1;
+        }
 }
 
 int Rtp_send(rtvs_packet_t packet, size_t payload_size)
@@ -46,6 +49,9 @@ int Rtp_send(rtvs_packet_t packet, size_t payload_size)
         packet.seqnum = htons(packet.seqnum);
         packet.timestamp = htonl(packet.timestamp);
         packet.ssrc = htonl(packet.ssrc);
-        FAIL_ON_NEGATIVE(sendto(sock, &packet, RTP_HEADER_SIZE + payload_size, 0, (struct sockaddr*) &saddr, sizeof(saddr)))
+        /* It's ok to ignore ECONNREFUSED here, nobody is currently listening */
+        if (sendto(sock, &packet, RTP_HEADER_SIZE + payload_size, 0,
+                  (struct sockaddr*) &saddr, sizeof(saddr)) < 0 && errno != ECONNREFUSED)
+                return (-1);
         return (0);
 }

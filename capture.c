@@ -21,12 +21,12 @@ static struct
         void   *ptr;
         size_t size;
 }                         membuf[NB_BUFFER];
-static int                fd;
+static int                fd = -1;
 static fd_set             fds;
 static struct v4l2_buffer buf;
-static int                hwcx_supported = 0;
-static int64_t            old_pts = 0;
-static uint64_t           frame_num = 0;
+static int                streamon, hwcx_supported;
+static int64_t            old_pts;
+static uint64_t           frame_num;
 
 int Capture_start(rtvs_config_t *cfg)
 {
@@ -42,10 +42,14 @@ int Capture_start(rtvs_config_t *cfg)
         /* Check device capabilities */
         BZERO_STRUCT(cap)
         FAIL_ON_NEGATIVE(ioctl(fd, VIDIOC_QUERYCAP, &cap))
-        if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE))
-                errx(1, "%s is no video capture device", cfg->device);
-        if (!(cap.capabilities & V4L2_CAP_STREAMING))
-                errx(1, "%s does not support streaming", cfg->device);
+        if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
+                fprintf(stderr, "%s is no video capture device\n", cfg->device);
+                return (-1);
+        }
+        if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
+                fprintf(stderr, "%s does not support streaming\n", cfg->device);
+                return (-1);
+        }
 
         /* Capture format settings */
         BZERO_STRUCT(fmt)
@@ -69,8 +73,10 @@ int Capture_start(rtvs_config_t *cfg)
 
         /* Frame rate settings */
         FAIL_ON_NEGATIVE(ioctl(fd, VIDIOC_G_PARM, &setfps))
-        if (!(setfps.parm.capture.capability & V4L2_CAP_TIMEPERFRAME))
-                errx(1, "%s does not support frame rate settings", cfg->device);
+        if (!(setfps.parm.capture.capability & V4L2_CAP_TIMEPERFRAME)) {
+                fprintf(stderr, "%s does not support frame rate settings\n", cfg->device);
+                return (-1);
+        }
         BZERO_STRUCT(setfps)
         setfps.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         setfps.parm.capture.timeperframe.numerator = 1;
@@ -101,7 +107,7 @@ int Capture_start(rtvs_config_t *cfg)
                 membuf[i].ptr = mmap(NULL, buf.length, PROT_READ|PROT_WRITE,
                     MAP_SHARED, fd, buf.m.offset);
                 if (membuf[i].ptr == MAP_FAILED)
-                        return -1;
+                        return (-1);
         }
 
         /* Queue the buffers */
@@ -118,29 +124,38 @@ int Capture_start(rtvs_config_t *cfg)
         /* Start capturing */
         enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         FAIL_ON_NEGATIVE(ioctl(fd, VIDIOC_STREAMON, &type))
+        streamon = 1;
 
         return (0);
 }
 
-int Capture_stop(void)
+void Capture_stop(void)
 {
         /* Stop capturing */
         enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        FAIL_ON_NEGATIVE(ioctl(fd, VIDIOC_STREAMOFF, &type))
+        if (streamon) {
+                PERR_ON_NEGATIVE(ioctl(fd, VIDIOC_STREAMOFF, &type))
+                streamon = 0;
+        }
 
         /* Unmap the buffers */
-        for (int i = 0; i < NB_BUFFER; ++i)
-            FAIL_ON_NEGATIVE(munmap(membuf[i].ptr, membuf[i].size))
+        for (int i = 0; i < NB_BUFFER; ++i) {
+                if (membuf[i].ptr != NULL)
+                        PERR_ON_NEGATIVE(munmap(membuf[i].ptr, membuf[i].size))
+                membuf[i].ptr = NULL;
+        }
 
-        FAIL_ON_NEGATIVE(close(fd))
-        return (0);
+        if (fd > 0) {
+                PERR_ON_NEGATIVE(close(fd))
+                fd = -1;
+        }
 }
 
 static int64_t get_curtime()
 {
         struct timespec ts;
 
-        clock_gettime(CLOCK_REALTIME, &ts);
+        FAIL_ON_NEGATIVE(clock_gettime(CLOCK_REALTIME, &ts))
         return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
 
@@ -153,7 +168,7 @@ int Capture_get_frame(rtvs_frame_t *frame)
                 frame->flags = HARD_ENCODED;
         frame->data = membuf[buf.index].ptr;
         frame->size = buf.bytesused;
-        frame->pts  = get_curtime();
+        FAIL_ON_NEGATIVE(frame->pts = get_curtime())
         ++frame_num;
 
         if (old_pts) {
