@@ -1,0 +1,30 @@
+Raspberry pi specificities
+==========================
+
+The Raspberry pi contains a Broadcom videocore IV GPU supporting OpenMAX and H264 hardware encoding.
+The MMAL API is a Broadcom specific API used on videocore IV to abstract OpenMAX.
+4 Components are available under OpenMAX/MMAL: camera, preview, encoder and null_sink.
+
+The preview component is optional, but can be used full screen or directed to a specific rectangular area on the display.
+If preview is disabled, the null_sink component is used to 'absorb' the preview frames.
+It is necessary for the camera to produce preview frames as they are used for calculating exposure and white balance settings.
+
+
+- github.com/raspberrypi/firmware
+
+    * Broadcom API headers and libraries are located under /opt/vc/include and /opt/vc/lib
+    * OpenMAX IL components documentation is contained under /documentation/ilcomponents
+
+- github.com/raspberrypi/userland
+
+    Doxygen documentation can be extracted from a given source file.
+
+    * MMAL implementation can be found under /interface/mmal
+    * OpenMAX IL is located under /interface/vmcs_host/khronos/IL and /host_applications/framework/common
+    * Raspberry pi camera source code is available at /host_applications/linux/apps/raspicam
+
+
+Additional resources:
+
+http://elinux.org/Raspberry_Pi_VideoCore_APIs
+http://www.jvcref.com/files/PI/documentation/html/index.html
