@@ -72,6 +72,8 @@ int Capture_start(rtvs_config_t *cfg)
                 hwcx_supported = 1;
 
         /* Frame rate settings */
+        BZERO_STRUCT(setfps);
+        setfps.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         FAIL_ON_NEGATIVE(ioctl(fd, VIDIOC_G_PARM, &setfps))
         if (!(setfps.parm.capture.capability & V4L2_CAP_TIMEPERFRAME)) {
                 fprintf(stderr, "%s does not support frame rate settings\n", cfg->device);
