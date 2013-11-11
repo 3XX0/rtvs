@@ -43,10 +43,12 @@ int Capture_start(rtvs_config_t *cfg)
         BZERO_STRUCT(cap)
         FAIL_ON_NEGATIVE(ioctl(fd, VIDIOC_QUERYCAP, &cap))
         if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
+                errno = ENODEV;
                 fprintf(stderr, "%s is no video capture device\n", cfg->device);
                 return (-1);
         }
         if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
+                errno = ENOTSUP;
                 fprintf(stderr, "%s does not support streaming\n", cfg->device);
                 return (-1);
         }
@@ -76,6 +78,7 @@ int Capture_start(rtvs_config_t *cfg)
         setfps.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         FAIL_ON_NEGATIVE(ioctl(fd, VIDIOC_G_PARM, &setfps))
         if (!(setfps.parm.capture.capability & V4L2_CAP_TIMEPERFRAME)) {
+                errno = ENOTSUP;
                 fprintf(stderr, "%s does not support frame rate settings\n", cfg->device);
                 return (-1);
         }

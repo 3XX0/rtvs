@@ -15,6 +15,7 @@ static volatile int sigcatch;
 
 static void rtvs_config_default(rtvs_config_t *cfg, int codec)
 {
+        /* Global configuration */
         cfg->device         = "/dev/video0";
         cfg->framerate      = 30;
         cfg->bitrate        = 400;
@@ -22,6 +23,7 @@ static void rtvs_config_default(rtvs_config_t *cfg, int codec)
         cfg->width          = 320;
         cfg->height         = 240;
 
+        /* Codec configuration */
         if (codec == VP8) {
                 cfg->codec.name     = "VP8";
                 cfg->codec.cx_iface = &vpx_codec_vp8_cx;
@@ -61,7 +63,6 @@ static int _kbhit(void)
         return (0);
 }
 
-/* TODO Handle vpx error codes */
 int main(int argc, char **argv)
 {
         struct sigaction act;

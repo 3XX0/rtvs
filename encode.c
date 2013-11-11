@@ -92,7 +92,7 @@ void Encoder_stop(void)
 
 int Encoder_encode_frame(const rtvs_config_t *cfg, rtvs_frame_t *frames)
 {
-        if ((frames[0].flags & HARD_ENCODED))
+        if ((frames[0].flags & HARD_ENCODED) || (frames[0].flags == EMPTY))
                 return (0);
 
         const vpx_codec_cx_pkt_t         *pkt;
