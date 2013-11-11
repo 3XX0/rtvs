@@ -25,6 +25,14 @@ SRC =  main.c \
 	   frame.c \
 	   rtp.c \
 
+ifneq (,$(findstring WITH_V4L2_CAPTURE, $(PREPROC)))
+	SRC += capture_v4l2.c
+endif
+ifneq (,$(findstring WITH_MMAL_CAPTURE, $(PREPROC)))
+	SRC += capture_mmal.c
+	CFLAGS += -fgnu89-inline $(addprefix -I , $(INC))
+endif
+
 OBJ = $(SRC:.c=.o)
 
 all : $(TARGET)

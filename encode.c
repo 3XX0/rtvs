@@ -2,13 +2,15 @@
 
 #include "rtvs.h"
 
-#include <libswscale/swscale.h>
 #include <vpx/vp8cx.h>
+#ifdef WITH_V4L2_CAPTURE
+#include <libswscale/swscale.h>
 
+static struct SwsContext *scale_ctx;
+#endif
 static vpx_codec_ctx_t   codec;
 static vpx_image_t       yuyv_img;
 static vpx_image_t       yuv420_img;
-static struct SwsContext *scale_ctx;
 static const char        *vpx_err;
 
 void Encoder_perror(const char *err)
@@ -64,11 +66,11 @@ int Encoder_start(rtvs_config_t *cfg)
         if (CONFIG_VP9(cfg))
                 vpx_codec_control(&codec, VP9E_SET_FRAME_PARALLEL_DECODING, 1); /* Enable parallel decoding */
 #endif
-
+#ifdef WITH_V4L2_CAPTURE
         /* Initialize scaling context for subsampling conversion 4:2:2 -> 4:2:0 */
         FAIL_ON_NULL(scale_ctx = sws_getContext(cfg->width, cfg->height, PIX_FMT_YUYV422,
             cfg->width, cfg->height, PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL))
-
+#endif
         FAIL_ON_ZERO(vpx_img_alloc(&yuv420_img, VPX_IMG_FMT_I420, cfg->width, cfg->height, 1))
         FAIL_ON_ZERO(vpx_img_alloc(&yuyv_img, VPX_IMG_FMT_YUY2, cfg->width, cfg->height, 1))
         return (0);
@@ -78,7 +80,9 @@ void Encoder_stop(void)
 {
         vpx_img_free(&yuv420_img);
         vpx_img_free(&yuyv_img);
+#ifdef WITH_V4L2_CAPTURE
         sws_freeContext(scale_ctx);
+#endif
         if (vpx_codec_destroy(&codec)) {
                 vpx_err = vpx_codec_error(&codec);
                 Encoder_perror(__FUNCTION__);
@@ -101,11 +105,11 @@ int Encoder_encode_frame(const rtvs_config_t *cfg, rtvs_frame_t *frames)
 
         assert(frames[0].size == (size_t) cfg->width * cfg->height * 2);
         memcpy(yuyv_img.planes[0], frames[0].data, frames[0].size);
-
+#ifdef WITH_V4L2_CAPTURE
         /* Scaling and subsampling conversion */
         FAIL_ON_NEGATIVE(sws_scale(scale_ctx, (const uint8_t * const *) yuyv_img.planes, yuyv_img.stride,
             0, cfg->height, yuv420_img.planes, yuv420_img.stride))
-
+#endif
         if (vpx_codec_encode(&codec, &yuv420_img, pts, duration, 0, VPX_DL_REALTIME)) {
                 vpx_err = vpx_codec_error(&codec);
                 return (-1);
