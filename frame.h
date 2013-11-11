@@ -17,12 +17,12 @@ enum /* Frame flags */
 
 typedef struct
 {
-        uint8_t             flags;
-        const unsigned char *data;
-        size_t              size;
-        int64_t             pts;
-        unsigned int        partition_num;
-        size_t              partition_size[MAX_PARTITIONS];
+        uint8_t       flags;
+        unsigned char *data;
+        size_t        size;
+        int64_t       pts;
+        unsigned int  partition_num;
+        size_t        partition_size[MAX_PARTITIONS];
 } rtvs_frame_t;
 
 enum /* Header sizes */

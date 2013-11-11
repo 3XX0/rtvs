@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "codec.h"
+#include "capture.h"
 #include "config.h"
 #include "frame.h"
 #include "bed.h"
@@ -29,6 +30,7 @@
 
 /* Modules definitions */
 
+extern void Capture_perror(const char *err);
 extern int Capture_start(rtvs_config_t *cfg);
 extern void Capture_stop(void);
 extern int Capture_get_frame(rtvs_frame_t *frame);

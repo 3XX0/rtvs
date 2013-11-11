@@ -4,8 +4,16 @@ CC 	= $(CROSS_PREFIX)gcc
 RM := rm -f
 
 PREPROC = HAS_VP8_HW_SUPPORT \
-		  HAS_VP9_SUPPORT \
 		  LITTLE_ENDIAN \
+		  WITH_MMAL_CAPTURE \
+		  #BIG_ENDIAN \
+		  #WITH_V4L2_CAPTURE \
+		  #HAS_VP9_SUPPORT \
+
+INC = userland/ \
+	  firmware/hardfp/opt/vc/include/interface/vcos/pthreads/ \
+	  firmware/opt/vc/include/ \
+	  firmware/opt/vc/include/interface/vmcs_host/linux/ \
 
 CFLAGS  = -std=c99 -W -Wall -Wextra -pipe -O3 -D_POSIX_C_SOURCE=200112L -D_XOPEN_SOURCE=700 $(EXTRA_CFLAGS)
 LDFLAGS = -lvpx -lswscale $(EXTRA_LDFLAGS)
@@ -17,7 +25,6 @@ ifneq (,$(findstring Ubuntu, $(UNAME)))
 endif
 
 SRC =  main.c \
-	   capture.c \
 	   encode.c \
 	   mux.c \
 	   packetizer.c \

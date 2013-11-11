@@ -38,6 +38,26 @@ static void rtvs_config_default(rtvs_config_t *cfg, int codec)
                 cfg->codec.fourcc   = VP9_FOURCC;
         }
 #endif
+
+        /* Capture configuration */
+        /* TODO Add support for V4L2 parameters as well */
+#ifdef WITH_MMAL_CAPTURE
+        cfg->capture.rotation             = 0;
+        cfg->capture.saturation           = 0;
+        cfg->capture.sharpness            = 0;
+        cfg->capture.contrast             = 0;
+        cfg->capture.brightness           = 50;
+        cfg->capture.iso                  = 0;
+        cfg->capture.stabilize            = 0;
+        cfg->capture.hflip                = 0;
+        cfg->capture.vflip                = 0;
+        cfg->capture.shutter_speed        = 0;
+        cfg->capture.exposure_comp        = 0;
+        cfg->capture.exposure_mode        = MMAL_PARAM_EXPOSUREMODE_AUTO;
+        cfg->capture.exposure_meter       = MMAL_PARAM_EXPOSUREMETERINGMODE_AVERAGE;
+        cfg->capture.awb_mode             = MMAL_PARAM_AWBMODE_AUTO;
+        cfg->capture.image_fx             = MMAL_PARAM_IMAGEFX_NONE;
+#endif
 }
 
 static void sig_handler(int sig)
@@ -78,6 +98,7 @@ int main(int argc, char **argv)
         act.sa_handler = &sig_handler;
         if (sigaction(SIGTERM, &act, NULL) < 0 ||
             sigaction(SIGQUIT, &act, NULL) < 0 ||
+            sigaction(SIGALRM, &act, NULL) < 0 ||
             sigaction(SIGINT, &act, NULL) < 0) {
                 perror("Could not setup signal handlers");
                 return (-1);
@@ -129,7 +150,7 @@ usage:
 
         /* Startup */
         if (Capture_start(&cfg) < 0) {
-                perror("Could not start capturing");
+                Capture_perror("Could not start capturing");
                 goto cleanup;
         }
         if (Encoder_start(&cfg) < 0) {
@@ -156,7 +177,7 @@ usage:
         while (!_kbhit() && !sigcatch) {
                 BZERO_ARRAY(frames)
                 if (Capture_get_frame(frames) < 0) {
-                        perror("Fetching frame failed");
+                        Capture_perror("Fetching frame failed");
                         continue;
                 }
                 if (Encoder_encode_frame(&cfg, frames) < 0) {

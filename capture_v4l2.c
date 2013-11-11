@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h>
+#include <errno.h>
 #include <err.h>
 #include <string.h>
-#include <time.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -154,14 +154,6 @@ void Capture_stop(void)
                 PERR_ON_NEGATIVE(close(fd))
                 fd = -1;
         }
-}
-
-static int64_t get_curtime()
-{
-        struct timespec ts;
-
-        FAIL_ON_NEGATIVE(clock_gettime(CLOCK_REALTIME, &ts))
-        return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
 
 int Capture_get_frame(rtvs_frame_t *frame)
