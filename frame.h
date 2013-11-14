@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 
+#define YUV420_RATIO 3 / 2
+#define YUV422_RATIO 2
+
 enum /* VPX limits */
 {
         MAX_SIMULT_FRAMES = 3,

@@ -13,19 +13,11 @@
 #include <interface/mmal/util/mmal_connection.h>
 
 #define NB_BUFFER 4
-#define I420_RATIO 3 / 2
 #define ERR_ON_MMAL_FAILURE(x) if ((x) != MMAL_SUCCESS) { goto error; };
 
 #define MMAL_CAMERA_PREVIEW_PORT 0
 #define MMAL_CAMERA_VIDEO_PORT   1
 
-typedef struct
-{
-        const rtvs_config_t *cfg;
-        MMAL_POOL_T         *video_port_pool;
-} PORT_USERDATA_T;
-
-static PORT_USERDATA_T   userdata;
 static VCOS_SEMAPHORE_T  frame_lock;
 static MMAL_COMPONENT_T  *camera, *preview;
 static MMAL_CONNECTION_T *preview_connection;
@@ -132,14 +124,11 @@ static void camera_control_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
 
 static void video_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf)
 {
-        PORT_USERDATA_T     *data = (PORT_USERDATA_T *) port->userdata;
-        MMAL_POOL_T         *video_port_pool = data->video_port_pool;
-        const rtvs_config_t *cfg = data->cfg;
+        MMAL_POOL_T *video_port_pool = (MMAL_POOL_T *) port->userdata;
 
         /* Get the frame from the video buffer */
         mmal_buffer_header_mem_lock(buf);
         memcpy(framebuf.data, buf->data, buf->length);
-        assert(buf->length == cfg->width * cfg->height * I420_RATIO);
         framebuf.size = buf->length;
         mmal_buffer_header_mem_unlock(buf);
 
@@ -165,7 +154,7 @@ int Capture_start(rtvs_config_t *cfg)
         bcm_host_init();
 
         vcos_semaphore_create(&frame_lock, "frame locker", 0); // TODO error
-        framebuf.data = malloc(cfg->width * cfg->height * I420_RATIO); // TODO error
+        framebuf.data = malloc(cfg->width * cfg->height * YUV420_RATIO); // TODO error
 
         /* Create components (no preview required) */
         ERR_ON_MMAL_FAILURE(r = mmal_component_create(MMAL_COMPONENT_DEFAULT_CAMERA, &camera))
@@ -188,7 +177,7 @@ int Capture_start(rtvs_config_t *cfg)
                 .max_preview_video_h = cfg->height,
                 .num_preview_video_frames = 2,
                 .stills_capture_circular_buffer_height = 0,
-                .fast_preview_resume = 0,
+                .fast_preview_resume = 1,
                 .use_stc_timestamp = MMAL_PARAM_TIMESTAMP_MODE_RESET_STC
         };
         ERR_ON_MMAL_FAILURE(r = mmal_port_parameter_set(camera->control, &cam_config.hdr))
@@ -198,9 +187,8 @@ int Capture_start(rtvs_config_t *cfg)
 
         /* Preview port format */
         format = preview_port->format;
-        format->encoding = MMAL_ENCODING_OPAQUE;
+        format->encoding = MMAL_ENCODING_I420;
         format->encoding_variant = MMAL_ENCODING_I420;
-        format->encoding = MMAL_ENCODING_OPAQUE;
         format->es->video.width = cfg->width;
         format->es->video.height = cfg->height;
         format->es->video.crop.x = 0;
@@ -218,11 +206,9 @@ int Capture_start(rtvs_config_t *cfg)
 
         /* Create buffers pool */
         video_port->buffer_num = NB_BUFFER;
-        video_port->buffer_size = cfg->width * cfg->height * I420_RATIO;
+        video_port->buffer_size = cfg->width * cfg->height * YUV420_RATIO;
         video_port_pool = (MMAL_POOL_T *) mmal_port_pool_create(video_port, video_port->buffer_num, video_port->buffer_size);
-        userdata.cfg = cfg;
-        userdata.video_port_pool = video_port_pool;
-        video_port->userdata = (struct MMAL_PORT_USERDATA_T *) &userdata;
+        video_port->userdata = (struct MMAL_PORT_USERDATA_T *) video_port_pool;
 
         /* Video callback */
         ERR_ON_MMAL_FAILURE(r = mmal_port_enable(video_port, video_buffer_callback))
@@ -232,7 +218,7 @@ int Capture_start(rtvs_config_t *cfg)
         ERR_ON_MMAL_FAILURE(r = mmal_component_enable(camera))
 
         /* Connect the video port to the null_sink preview (see RPI_README) */
-        ERR_ON_MMAL_FAILURE(r = mmal_connection_create(&preview_connection, preview_port, preview->input[MMAL_CAMERA_PREVIEW_PORT],
+        ERR_ON_MMAL_FAILURE(r = mmal_connection_create(&preview_connection, preview_port, preview->input[0],
                                 MMAL_CONNECTION_FLAG_TUNNELLING | MMAL_CONNECTION_FLAG_ALLOCATION_ON_INPUT))
         ERR_ON_MMAL_FAILURE(r = mmal_connection_enable(preview_connection))
 

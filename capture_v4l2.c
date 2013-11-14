@@ -16,6 +16,7 @@
 #include <linux/videodev2.h>
 
 #define NB_BUFFER 4
+
 static struct
 {
         void   *ptr;

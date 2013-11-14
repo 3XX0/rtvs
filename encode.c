@@ -92,7 +92,7 @@ void Encoder_stop(void)
 
 int Encoder_encode_frame(const rtvs_config_t *cfg, rtvs_frame_t *frames)
 {
-        if ((frames[0].flags & HARD_ENCODED) || (frames[0].flags == EMPTY))
+        if ((frames[0].flags & HARD_ENCODED))
                 return (0);
 
         const vpx_codec_cx_pkt_t         *pkt;
@@ -103,12 +103,16 @@ int Encoder_encode_frame(const rtvs_config_t *cfg, rtvs_frame_t *frames)
         const unsigned long   duration = ((double) 1 / cfg->framerate) / /* timeperframe / timebase */
                                          ((double) vpx_cfg->g_timebase.num / vpx_cfg->g_timebase.den);
 
-        assert(frames[0].size == (size_t) cfg->width * cfg->height * 2);
-        memcpy(yuyv_img.planes[0], frames[0].data, frames[0].size);
-#ifdef WITH_V4L2_CAPTURE
         /* Scaling and subsampling conversion */
+#ifdef WITH_V4L2_CAPTURE
+        assert(frames[0].size == (size_t) cfg->width * cfg->height * YUV422_RATIO);
+        memcpy(yuyv_img.planes[0], frames[0].data, frames[0].size);
         FAIL_ON_NEGATIVE(sws_scale(scale_ctx, (const uint8_t * const *) yuyv_img.planes, yuyv_img.stride,
             0, cfg->height, yuv420_img.planes, yuv420_img.stride))
+#endif
+#ifdef WITH_MMAL_CAPTURE
+        assert(frames[0].size == (size_t) cfg->width * cfg->height * YUV420_RATIO);
+        memcpy(yuv420_img.planes[0], frames[0].data, frames[0].size);
 #endif
         if (vpx_codec_encode(&codec, &yuv420_img, pts, duration, 0, VPX_DL_REALTIME)) {
                 vpx_err = vpx_codec_error(&codec);
