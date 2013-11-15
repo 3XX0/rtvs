@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 #include <bcm_host.h>
 
 #include "rtvs.h"
@@ -12,8 +13,13 @@
 #include <interface/mmal/util/mmal_default_components.h>
 #include <interface/mmal/util/mmal_connection.h>
 
-#define NB_BUFFER 4
 #define ERR_ON_MMAL_FAILURE(x) if ((x) != MMAL_SUCCESS) { goto error; };
+#define PERR_ON_MMAL_FAILURE(x) do { if ((r = x) != MMAL_SUCCESS) {  \
+                                     mmal_err = mmal_strerror(r);    \
+                                     Capture_perror(__FUNCTION__); } \
+                                   } while (0);
+
+#define NB_BUFFER 4
 
 #define MMAL_CAMERA_PREVIEW_PORT 0
 #define MMAL_CAMERA_VIDEO_PORT   1
@@ -147,14 +153,18 @@ static void video_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf)
 
 int Capture_start(rtvs_config_t *cfg)
 {
-        MMAL_STATUS_T     r;
-        MMAL_ES_FORMAT_T  *format;
+        MMAL_STATUS_T    r;
+        MMAL_ES_FORMAT_T *format;
 
         /* Initialize the GPU */
         bcm_host_init();
 
         vcos_semaphore_create(&frame_lock, "frame locker", 0); // TODO error
-        framebuf.data = malloc(cfg->width * cfg->height * YUV420_RATIO); // TODO error
+        framebuf.data = malloc(cfg->width * cfg->height * YUV420_RATIO);
+        if (!framebuf.data) {
+                r = MMAL_ENOMEM;
+                goto error;
+        }
 
         /* Create components (no preview required) */
         ERR_ON_MMAL_FAILURE(r = mmal_component_create(MMAL_COMPONENT_DEFAULT_CAMERA, &camera))
@@ -242,42 +252,45 @@ error:
 
 void Capture_stop(void)
 {
+        MMAL_STATUS_T r;
+
         free(framebuf.data);
+        framebuf.data = NULL;
 
         /* Stop the capture */
         if (video_port)
-                mmal_port_parameter_set_boolean(video_port, MMAL_PARAMETER_CAPTURE, 0);
+                PERR_ON_MMAL_FAILURE(mmal_port_parameter_set_boolean(video_port, MMAL_PARAMETER_CAPTURE, 0))
 
         /* Unqueue the buffers */
         if (video_port_pool) {
-                mmal_queue_destroy(video_port_pool->queue); // TODO check error except here
+                mmal_queue_destroy(video_port_pool->queue);
                 video_port_pool = NULL;
         }
 
         /* Destroy the video/preview connection */
         if (preview_connection) {
-                mmal_connection_disable(preview_connection);
-                mmal_connection_destroy(preview_connection);
+                PERR_ON_MMAL_FAILURE(mmal_connection_disable(preview_connection))
+                PERR_ON_MMAL_FAILURE(mmal_connection_destroy(preview_connection))
                 preview_connection = NULL;
         }
 
         /* Disable all ports */
         if (video_port && video_port->is_enabled)
-                mmal_port_disable(video_port);
+                PERR_ON_MMAL_FAILURE(mmal_port_disable(video_port))
         if (camera && camera->control->is_enabled)
-                mmal_port_disable(camera->control);
+                PERR_ON_MMAL_FAILURE(mmal_port_disable(camera->control))
         video_port = NULL;
         preview_port = NULL;
 
         /* Destroy components */
         if (preview) {
-                mmal_component_disable(preview);
-                mmal_component_destroy(preview);
+                PERR_ON_MMAL_FAILURE(mmal_component_disable(preview))
+                PERR_ON_MMAL_FAILURE(mmal_component_destroy(preview))
                 preview = NULL;
         }
         if (camera) {
-                mmal_component_disable(camera);
-                mmal_component_destroy(camera);
+                PERR_ON_MMAL_FAILURE(mmal_component_disable(camera))
+                PERR_ON_MMAL_FAILURE(mmal_component_destroy(camera))
                 camera = NULL;
         }
 }
@@ -291,7 +304,10 @@ int Capture_get_frame(rtvs_frame_t *frame)
 
         frame->data = framebuf.data;
         frame->size = framebuf.size;
-        FAIL_ON_NEGATIVE(frame->pts = get_curtime()) // TODO modify error
+        if ((frame->pts = get_curtime()) < 0) {
+                mmal_err = strerror(errno);
+                return (-1);
+        }
         ++frame_num;
 
         if (old_pts) {
