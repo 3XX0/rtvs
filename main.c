@@ -179,17 +179,22 @@ usage:
             " | device: %s\n | codec: %s\n | resolution: %ux%u\n | fps: %u\n | bitrate: %u\n | threads: %u%s\n\n",
             CBLUE, cfg.device, cfg.codec.name, cfg.width, cfg.height, cfg.framerate, cfg.bitrate, cfg.thread_num, CDFLT);
 
+        uint64_t t0, t1, t2, t3;
+
         /* Capture loop */
         while (!_kbhit() && !sigcatch) {
                 BZERO_ARRAY(frames)
+                t0 = get_curtime();
                 if (Capture_get_frame(frames) < 0) {
                         Capture_perror("Fetching frame failed");
                         continue;
                 }
+                t1 = get_curtime();
                 if (Encoder_encode_frame(&cfg, frames) < 0) {
                         Encoder_perror("Encoding frame failed");
                         continue;
                 }
+                t2 = get_curtime();
                 for (int i = 0; i < MAX_SIMULT_FRAMES; ++i)
                         if (frames[i].flags != EMPTY) {
                                 if (mux_parm)
@@ -198,6 +203,9 @@ usage:
                                         perror("Sending failed");
                                 ++frame_num;
                         }
+                t3 = get_curtime();
+                fprintf(stderr, "%-9s%" PRIu64 "\n%-9s%" PRIu64 "\n%-9s%" PRIu64 "\n-------\n",
+                        "capture:", t1-t0, "encode:", t2-t1, "network:", t3-t2);
         }
 
 cleanup: /* Cleanup */
