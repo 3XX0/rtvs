@@ -149,19 +149,25 @@ usage:
         }
 
         /* Startup */
+        printf("Starting capture module\n");
         if (Capture_start(&cfg) < 0) {
                 Capture_perror("Could not start capturing");
                 goto cleanup;
         }
+        printf("Starting encoder module\n");
         if (Encoder_start(&cfg) < 0) {
                 Encoder_perror("Could not start encoding");
                 goto cleanup;
         }
-        if (mux_parm && Muxing_open_file(mux_parm) < 0) {
-                perror("Could not open mux file");
-                goto cleanup;
+        if (mux_parm) {
+                printf("Starting muxer module\n");
+                if (Muxing_open_file(mux_parm) < 0) {
+                        perror("Could not open mux file");
+                        goto cleanup;
+                }
         }
         if (stream_parm) {
+                printf("Starting network module\n");
                 Packetizer_init();
                 if (Rtp_start(stream_parm) < 0) {
                         perror("Could not start RTP transport");
@@ -195,13 +201,18 @@ usage:
         }
 
 cleanup: /* Cleanup */
-        if (stream_parm)
+        if (stream_parm) {
+                printf("Stopping network module\n");
                 Rtp_stop();
+        }
         if (mux_parm) {
+                printf("Stopping muxer module\n");
                 Muxing_ivf_write_header(&cfg, frame_num);
                 Muxing_close_file();
         }
+        printf("Stopping encoder module\n");
         Encoder_stop();
+        printf("Stopping capture module\n");
         Capture_stop();
 
         return (0);
