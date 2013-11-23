@@ -137,10 +137,6 @@ static void video_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf)
         memcpy(framebuf.data, buf->data, buf->length);
         framebuf.size = buf->length;
         mmal_buffer_header_mem_unlock(buf);
-
-        if (vcos_semaphore_trywait(&frame_lock) != VCOS_SUCCESS)
-                vcos_semaphore_post(&frame_lock);
-
         mmal_buffer_header_release(buf);
 
         /* Enqueue a fresh buffer */
@@ -149,6 +145,9 @@ static void video_buffer_callback(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf)
                 if (!buf || mmal_port_send_buffer(port, buf) != MMAL_SUCCESS)
                         fprintf(stderr, "Could not return mmal buffer\n");
         }
+
+        if (vcos_semaphore_trywait(&frame_lock) != VCOS_SUCCESS)
+                vcos_semaphore_post(&frame_lock);
 }
 
 int Capture_start(rtvs_config_t *cfg)
@@ -254,12 +253,20 @@ void Capture_stop(void)
 {
         MMAL_STATUS_T r;
 
-        free(framebuf.data);
-        framebuf.data = NULL;
-
         /* Stop the capture */
         if (video_port)
                 PERR_ON_MMAL_FAILURE(mmal_port_parameter_set_boolean(video_port, MMAL_PARAMETER_CAPTURE, 0))
+
+        /* Disable all ports */
+        if (video_port && video_port->is_enabled)
+                PERR_ON_MMAL_FAILURE(mmal_port_disable(video_port))
+        if (camera && camera->control->is_enabled)
+                PERR_ON_MMAL_FAILURE(mmal_port_disable(camera->control))
+        video_port = NULL;
+        preview_port = NULL;
+
+        free(framebuf.data);
+        framebuf.data = NULL;
 
         /* Unqueue the buffers */
         if (video_port_pool) {
@@ -273,14 +280,6 @@ void Capture_stop(void)
                 PERR_ON_MMAL_FAILURE(mmal_connection_destroy(preview_connection))
                 preview_connection = NULL;
         }
-
-        /* Disable all ports */
-        if (video_port && video_port->is_enabled)
-                PERR_ON_MMAL_FAILURE(mmal_port_disable(video_port))
-        if (camera && camera->control->is_enabled)
-                PERR_ON_MMAL_FAILURE(mmal_port_disable(camera->control))
-        video_port = NULL;
-        preview_port = NULL;
 
         /* Destroy components */
         if (preview) {
